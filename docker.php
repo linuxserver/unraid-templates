@@ -29,8 +29,8 @@ $docker->build_list();
 
 class Docker {
 
-	public $github_username = ''
-	public $github_password = ''
+	public $github_username = '';
+	public $github_password = '';
 	public $filename = '/home/fanart/www/webservice/unraid/apps.json';
 
 	public $requests = 0;
@@ -51,7 +51,6 @@ class Docker {
 		} else {
 			$url = 'https://raw.githubusercontent.com/Squidly271/repo.update/master/Repositories.json';
 			$repos = json_decode( $this->get_content_from_github( $url ) );
-			$json = array();
 			//$repos = array( $repos[0] ); // comment out after testing
 			foreach( $repos as $repo ) {
 				$file = $repo->url;
@@ -60,41 +59,46 @@ class Docker {
 				$treeurl = 'https://api.github.com/repos/'.$split[3].'/'.$split[4].'/git/trees/'.$split6;
 				$trees = json_decode( $this->get_content_from_github( $treeurl ) );
 				$this->requests++;
-				$this->tree_traverse( $trees, $repo->forum );
+				$this->tree_traverse( $trees, $repo );
 			}
 			$output['apps'] = $this->apps;
 			$output['requests'] = $this->requests;
 			$output['applist'] = $this->applist;
 
 			$jsonfile = json_encode( $output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
-			file_put_contents( $filename, $jsonfile );
+			if( $output['apps'] > 0 ) file_put_contents( $filename, $jsonfile );
 		}
 	}
 
-	public function tree_traverse( $file_list, $forum ) {
+	public function tree_traverse( $file_list, $repo1 ) {
 		foreach( $file_list->tree as $entry ) {
 			$fname = explode(".", $entry->path);
 			$fname = end($fname);
 			if( $entry->type == 'blob' && $fname == 'xml' ) {
 				$this->apps++;
-				$this->applist[] = $this->xmldata( $entry->url, $forum );
+				$this->applist[] = $this->xmldata( $entry->url, $repo1 );
 			} elseif( $entry->type == 'tree' ) {
 				$trees = json_decode( $this->get_content_from_github( $entry->url ) );
 				$this->requests++;
-				$this->tree_traverse( $trees, $forum );
+				$this->tree_traverse( $trees, $repo1 );
 			}
 		}
 	}
 
-	public function xmldata( $url, $forum ) {
+	public function xmldata( $url, $repo1 ) {
+		$forum = $repo1->forum;
+		$repo = $repo1->name;
+		
 		$filea = json_decode( $this->get_content_from_github( $url ) );
 		$this->requests++;
 		$fileContents= base64_decode( $filea->content );
 		$fileContents = str_replace(array("\n", "\r", "\t"), '', $fileContents);
 		$fileContents = trim(str_replace('"', "'", $fileContents));
 		$simpleXml = simplexml_load_string($fileContents);
-
+		
 		$simpleXml->Forum = $forum;
+		$simpleXml->Repo = $repo;
+
 		$simpleXml->Support = ( isset( $simpleXml->Support ) && !empty( $simpleXml->Support ) ) ? $simpleXml->Support : $forum;
 		$simpleXml->TemplatePath = $url;
 		$key = 'base_images_'.$simpleXml->Registry;
